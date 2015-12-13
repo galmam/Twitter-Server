@@ -1,0 +1,75 @@
+/*
+ * TaskListenToServer.cpp
+ *
+ *  Created on: Jan 10, 2014
+ *      Author: matanto
+ */
+
+#include "../include/TaskListenToServer.h"
+
+TaskListenToServer::TaskListenToServer(StompClient* client, ConnectionHandler* connectionHandler, const string& currentUser) : connectionHandler(connectionHandler), client(client), shouldStop(false) {
+
+}
+
+void TaskListenToServer::run() {
+	string answer;
+	while (!isShouldStop()) {
+		answer = "" ;
+		connectionHandler->getFrameAscii(answer, '\0');
+		vector<string> tokens;
+		TaskListenToKeyboard::split(answer, "\n", tokens);
+		cout << tokens[0] << endl;
+		if (tokens[0].compare("MESSAGE") == 0) {
+			gotAMessageFrame (tokens);
+		}
+		else if (tokens[0].compare("ERROR") == 0) {
+			gotAnErrorFrame(tokens);
+		}
+		else if (tokens[0].compare("RECEIPT") == 0) {
+			gotAReceiptFrame(tokens);
+		}
+		else if (tokens[0].compare("CONNECTED") == 0) {
+			client->setIsLoggedIn(true);
+			gotAConnectedFrame(tokens);
+		}
+	}
+}
+
+bool TaskListenToServer::isShouldStop() {
+	return this->shouldStop;
+}
+
+void TaskListenToServer::gotAMessageFrame(vector<string>& tokens) {
+	if (tokens.size() < 8)
+		cout << "Error receiving the information" << endl;
+	else {
+		vector<string> info;
+		TaskListenToKeyboard::split(tokens[1], ":", info);
+		vector<string> info2;
+		TaskListenToKeyboard::split(tokens[2], ":", info2);
+		std::stringstream time;
+		for (unsigned j=0; j<info2.size(); j++)
+			time << info2[j] << ":";
+		std::stringstream message;
+		for (unsigned i=6; i<tokens.size()-1; i++) {
+			message << tokens[i] << "\n";
+		}
+		cout << "Got a message from:" << info[1] << " " << message.str() << "on " << time.str() << endl;
+	}
+
+}
+
+void TaskListenToServer::gotAReceiptFrame(vector<string>& tokens) {
+
+}
+
+void TaskListenToServer::gotAnErrorFrame(vector<string>& tokens) {
+
+}
+
+void TaskListenToServer::gotAConnectedFrame(vector<string>& tokens) {
+
+}
+
+
+

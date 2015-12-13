@@ -1,0 +1,89 @@
+/*
+ * StompClient.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: matanto
+ */
+#include "../include/StompClient.h"
+
+
+using namespace std;
+
+StompClient::StompClient (): idCounter(0), receiptCounter(0), isLoggedIn(false) {
+
+}
+
+long StompClient::generateFollowId() {
+	long temp = this->idCounter;
+	this->idCounter ++;
+	return temp;
+}
+
+long StompClient::generateReceipt() {
+	long temp = this->receiptCounter;
+	this->receiptCounter ++;
+	return temp;
+}
+
+void StompClient::addNewUserToFollow(const string& userToFollow, long followId) {
+	int index = searchFollowingUser();
+	if (index == -1) {
+		FollowsByUserName following (currentUser);
+		UserFollows userFollows (followId, userToFollow);
+		following.getUserFollows().push_back(userFollows);
+		this->follows.push_back(following);
+	}
+	else {
+		UserFollows userFollows (followId, userToFollow);
+		this->follows[index].getUserFollows().push_back(userFollows);
+	}
+
+}
+
+void StompClient::removeFollowedUser(const string& userToRemove, long followId) {
+	int indexOfFollowing = searchFollowingUser();
+	int indexOfFollowed = searchFollowedUser (userToRemove);
+	if (indexOfFollowed != -1) {
+		this->follows[indexOfFollowing].getUserFollows()[indexOfFollowed].setFollowId(-1);
+	}
+	else
+		std::cout << "user not found" << std::endl;
+}
+
+int StompClient::searchFollowingUser() {
+	for (unsigned i=0; i < this->follows.size(); i++) {
+		if (this->follows[i].getFollowingUserName().compare(this->currentUser) == 0)
+			return i;
+	}
+	return -1; // In case the following user wasn't found
+}
+
+long StompClient::searchFollowedUser (const string& followedUser) {
+	int index = searchFollowingUser();
+	for (unsigned i=0; i < this->follows[index].getUserFollows().size(); i++) {
+		if (this->follows[index].getUserFollows()[i].getUserToFollow().compare(followedUser)) {
+			if (this->follows[index].getUserFollows()[i].getFollowId() != -1)
+				return this->follows[index].getUserFollows()[i].getFollowId();
+		}
+	}
+	return -1; // In case the followed user wasn't found
+}
+
+string StompClient::getCurrentUser() {
+	return this->currentUser;
+}
+
+void StompClient::setCurrentUser(const string& currentUser) {
+	this->currentUser = currentUser;
+}
+
+bool StompClient::isLogged() {
+	return isLoggedIn;
+}
+
+void StompClient::setIsLoggedIn(bool log) {
+	this->isLoggedIn = log;
+}
+
+
+

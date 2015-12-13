@@ -1,0 +1,192 @@
+/*
+ * TaskListenToKeyboard.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: matanto
+ */
+
+#include "../include/TaskListenToKeyboard.h"
+
+
+
+TaskListenToKeyboard::TaskListenToKeyboard (StompClient* stompClient) : client(stompClient), connectionHandler(),NUM_OF_ARGUMENTS_FOLLOW(2), NUM_OF_ARGUMENTS_LOGIN(5), NUM_OF_ARGUMENTS_LOGOUT(1) {
+
+}
+
+void TaskListenToKeyboard::run() {
+
+	string line;
+
+	while (getline (cin, line)) {
+		vector<string> tokens;
+		this->split(line, " ", tokens);
+		if ((tokens[0].compare("login") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_LOGIN)) {
+			executeLoginCommand(tokens);
+		}
+		else if ((tokens[0].compare("follow") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_FOLLOW) &&
+				client->getCurrentUser().compare("") != 0) {
+			executeFollowCommand(tokens);
+		}
+		else if (tokens[0].compare("tweet") == 0) {
+			executeTweetCommand(tokens);
+		}
+		else if ((tokens[0].compare("unfollow") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_FOLLOW) ) {
+			executeUnfollowCommand(tokens);
+		}
+		else if ((tokens[0].compare("clients") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_LOGOUT) ) {
+			executeClientsCommand();
+		}
+		else if ((tokens[0].compare("clients") == 0) && (tokens[1].compare("online")) && (tokens.size() == NUM_OF_ARGUMENTS_FOLLOW) ) {
+			executeClientsOnlineCommand();
+		}
+		else if ((tokens[0].compare("stats") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_LOGOUT) ) {
+			executeStatsCommand();
+		}
+		else if ((tokens[0].compare("logout") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_LOGOUT) ) {
+			executeLogoutCommand();
+		}
+		else if ((tokens[0].compare("exit_client") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_LOGOUT)) {
+			executeExitClientCommand();
+		}
+		else if ((tokens[0].compare("stop") == 0) && (tokens.size() == NUM_OF_ARGUMENTS_LOGOUT)) {
+			executeStopCommand();
+		}
+		else
+			cout << "Please enter the right arguments!" << endl;
+	}
+}
+
+
+string TaskListenToKeyboard::longToString(long num) {
+	ostringstream convert;
+	convert << num;
+	string result = convert.str();
+	return result;
+}
+
+string TaskListenToKeyboard::concatenateMessage(vector<string>& tokens) {
+	string message("");
+	for (unsigned i=1; i < tokens.size(); i++) {
+		message += string (tokens[i]) + string(" ");
+	}
+	return message;
+}
+
+void TaskListenToKeyboard::executeLoginCommand(vector<string>& tokens) {
+	string messageToSend;
+	int port = atoi (tokens[2].c_str());
+	ConnectionHandler *ch = new ConnectionHandler (tokens[1], port);
+	this->connectionHandler = ch;
+	if (connectionHandler->connect()) {
+		TaskListenToServer *listenToServer = new TaskListenToServer (client, ch);
+		boost::thread t2(&TaskListenToServer::run(), listenToServer); // Start running the TaskListenToServer
+		client->setCurrentUser(tokens[3]);
+		ConnectFrame *connectFrame = new ConnectFrame ("1.2", tokens[1], tokens[3], tokens[4], tokens[2]);
+		messageToSend = connectFrame->buildFrame();
+		connectionHandler->sendFrameAscii(messageToSend, '\n');
+	}
+	else
+		cout << "Could not connect to server. Check your Internet connection, IP and port." << endl;
+}
+
+void TaskListenToKeyboard::executeLogoutCommand() {
+	string messageToSend;
+	long disconnectReceipt = this->client->generateReceipt();
+	DisconnectFrame *disconnectFrame = new DisconnectFrame (disconnectReceipt);
+	messageToSend = disconnectFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+	client->setCurrentUser(""); // Reseting the currentUser
+	//ToDo : close the socket, make the current thread wait until an answer is received from the server
+}
+
+void TaskListenToKeyboard::executeExitClientCommand() {
+
+	//todo
+}
+
+void TaskListenToKeyboard::executeStopCommand() {
+	string messageToSend;
+	string shutDownMessage ("stop"); // toDo: check with the server
+	string destination ("/topic/server");
+	SendFrame *sendFrame = new SendFrame (shutDownMessage, destination);
+	messageToSend = sendFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+}
+
+void TaskListenToKeyboard::executeClientsCommand() {
+	string messageToSend;
+	string requestListOfAllUsersMessage ("clients"); // toDo: check with the server
+	string destination ("/topic/server");
+	SendFrame *sendFrame = new SendFrame (requestListOfAllUsersMessage, destination);
+	messageToSend = sendFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+}
+
+void TaskListenToKeyboard::executeStatsCommand() {
+	string messageToSend;
+	string requestListOfAllUsersMessage ("stats"); // toDo: check with the server
+	string destination ("/topic/server");
+	SendFrame *sendFrame = new SendFrame (requestListOfAllUsersMessage, destination);
+	messageToSend = sendFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+}
+
+void TaskListenToKeyboard::executeTweetCommand(vector<string>& tokens) {
+	string messageToSend;
+	string messageToTweet = concatenateMessage (tokens);
+	SendFrame *sendFrame = new SendFrame (messageToTweet, string("/topic/") + client->getCurrentUser());
+	messageToSend = sendFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+}
+
+void TaskListenToKeyboard::executeClientsOnlineCommand() {
+	string messageToSend;
+	string requestListOfAllUsersMessage ("clients online"); // toDo: check with the server
+	string destination ("/topic/server");
+	SendFrame *sendFrame = new SendFrame (requestListOfAllUsersMessage, destination);
+	messageToSend = sendFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+}
+
+void TaskListenToKeyboard::executeUnfollowCommand(vector<string>& tokens) {
+	string messageToSend;
+	string followedUser = tokens[1]; // The user we want to unfollow
+	long subscriptionId = client->searchFollowedUser (followedUser); // Searching for the followed user in the current user's list
+	if (subscriptionId != -1) { // The followed user was found
+	  this->client->removeFollowedUser (followedUser, subscriptionId); // Removing the followed user from the list current user's following
+	  UnsubscribeFrame *unsubscribeFrame = new UnsubscribeFrame (subscriptionId);
+	  messageToSend = unsubscribeFrame->buildFrame();
+	  connectionHandler->sendFrameAscii(messageToSend, '\n');
+	}
+}
+
+void TaskListenToKeyboard::executeFollowCommand(vector<string>& tokens) {
+	string messageToSend;
+	long id = this->client->generateFollowId(); // Generating unique id for the "follow" action
+	this->client->addNewUserToFollow(tokens[1], id);
+	string stringId = longToString (id); // Converting the id into string
+	string topicName = string("/topic/") + tokens[1];
+	SubscribeFrame *subscribeFrame = new SubscribeFrame (stringId, topicName);
+	messageToSend = subscribeFrame->buildFrame();
+	connectionHandler->sendFrameAscii(messageToSend, '\n');
+}
+
+void TaskListenToKeyboard::split(const string& str, const string& delimiters , vector<string>& tokens)
+{
+	// Skip delimiters at beginning.
+	string::size_type lastPos = str.find_first_not_of(delimiters, 0);
+	// Find first "non-delimiter".
+	string::size_type pos     = str.find_first_of(delimiters, lastPos);
+	while (string::npos != pos || string::npos != lastPos)
+	{
+		// Found a token, add it to the vector.
+		tokens.push_back(str.substr(lastPos, pos - lastPos));
+		// Skip delimiters.  Note the "not_of"
+		lastPos = str.find_first_not_of(delimiters, pos);
+		// Find next "non-delimiter"
+		pos = str.find_first_of(delimiters, lastPos);
+	}
+}
+
+
+
